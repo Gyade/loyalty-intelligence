@@ -1,21 +1,38 @@
-const SUPABASE_URL = "https://medxfuihhtahojtlvevh.supabase.co/rest/v1/"; // Remplace par ton URL Supabase
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1lZHhmdWloaHRhaG9qdGx2ZXZoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc2Njc4NzIsImV4cCI6MjEwMzI0Mzg3Mn0.0-bIKkoRPCN6O_Mg9gEGljepYUvA0bubm4ARmRKshgI"; // Remplace par ta clé 'anon' publique
+<script>
+  // 1. Déclaration des clés Supabase
+  const SUPABASE_URL = "https://medxfuihhtahojtlvevh.supabase.co";
+  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1lZHhmdWloaHRhaG9qdGx2ZXZoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc2Njc4NzIsImV4cCI6MjEwMzI0Mzg3Mn0.0-bIKkoRPCN6O_Mg9gEGljepYUvA0bubm4ARmRKshgI";
 
-async function loadInsights() {
-  try {
-    // Récupère tous les insights du plus récent au plus ancien
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/insights?select=*&order=created_at.desc`, {
-      headers: {
-        "apikey": SUPABASE_ANON_KEY,
-        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+  // 2. Fonction de chargement dynamique depuis la base Supabase
+  async function loadInsights() {
+    try {
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/insights?select=*&order=created_at.desc`, {
+        headers: {
+          "apikey": SUPABASE_ANON_KEY,
+          "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Erreur Supabase HTTP: ${response.status}`);
       }
-    });
-    
-    const insights = await response.json();
-    renderCards(insights); // Ta fonction d'affichage de cartes existante
-  } catch (e) {
-    console.error("Erreur de chargement des données :", e);
-  }
-}
 
-loadInsights();
+      const insights = await response.json();
+      console.log("Données reçues de Supabase :", insights);
+      
+      // Appel de votre fonction d'affichage existante
+      if (typeof renderCards === "function") {
+        renderCards(insights);
+      } else if (typeof renderInsights === "function") {
+        renderInsights(insights);
+      } else {
+        console.warn("Aucune fonction 'renderCards' ou 'renderInsights' trouvée pour afficher les données.");
+      }
+    } catch (e) {
+      console.error("Erreur lors du chargement des données depuis Supabase :", e);
+    }
+  }
+
+  // 3. Lancement au chargement de la page
+  document.addEventListener("DOMContentLoaded", loadInsights);
+</script>
