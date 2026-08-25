@@ -97,9 +97,9 @@ Generate a strategic intelligence report in ENGLISH ONLY. Return ONLY RAW VALID 
   ]
 }`;
 
-  // Utilisation de la nouvelle adresse du Router d'inférence de Hugging Face
-  const HF_ENDPOINT = "https://router.huggingface.co/hf-inference/v1/chat/completions";
-  const MODEL_NAME = "meta-llama/Llama-3.2-3B-Instruct";
+  // Utilisation du routeur global universel de Hugging Face
+  const HF_GLOBAL_ROUTER = "https://router.huggingface.co/v1/chat/completions";
+  const MODEL_NAME = "meta-llama/Llama-3.3-70B-Instruct";
 
   const payload = {
     model: MODEL_NAME,
@@ -118,7 +118,7 @@ Generate a strategic intelligence report in ENGLISH ONLY. Return ONLY RAW VALID 
   };
 
   try {
-    const res = await postRequest(HF_ENDPOINT, headers, payload);
+    const res = await postRequest(HF_GLOBAL_ROUTER, headers, payload);
     if (res.ok) {
       const data = JSON.parse(res.body);
       if (data.choices && data.choices[0] && data.choices[0].message) {
@@ -137,11 +137,11 @@ Generate a strategic intelligence report in ENGLISH ONLY. Return ONLY RAW VALID 
 async function main() {
   const allInsights = [];
 
-  console.log("Pass 1/2: Génération HF - Airline Loyalty & Alliances...");
+  console.log("Pass 1/2: Génération HF Router - Airline Loyalty & Alliances...");
   const pass1 = await fetchPass("Airline Loyalty programs, status reciprocity, and dynamic award pricing");
   if (pass1 && pass1.insights) allInsights.push(...pass1.insights);
 
-  console.log("Pass 2/2: Génération HF - CRM & Co-Brand...");
+  console.log("Pass 2/2: Génération HF Router - CRM & Co-Brand...");
   const pass2 = await fetchPass("Co-brand credit cards, hyper-personalization, and retail/hospitality partnerships");
   if (pass2 && pass2.insights) allInsights.push(...pass2.insights);
 
