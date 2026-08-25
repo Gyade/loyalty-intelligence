@@ -7,6 +7,7 @@ if (!API_KEY) {
   process.exit(1);
 }
 
+// Utilisation de gemini-2.5-flash via l'alias d'API v1beta
 const URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`;
 
 const systemPrompt = `
@@ -60,8 +61,7 @@ async function main() {
       }],
       generationConfig: {
         responseMimeType: "application/json"
-      },
-      tools: [{ googleSearch: {} }]
+      }
     };
 
     const response = await fetch(URL, {
@@ -83,12 +83,10 @@ async function main() {
 
     let jsonText = data.candidates[0].content.parts[0].text.trim();
 
-    // Nettoyage au cas où des balises markdown sont renvoyées
     if (jsonText.startsWith('```')) {
       jsonText = jsonText.replace(/^```json\s*/, '').replace(/^```\s*/, '').replace(/```$/, '');
     }
 
-    // Validation syntaxique du JSON
     JSON.parse(jsonText);
 
     fs.writeFileSync('data.json', jsonText);
