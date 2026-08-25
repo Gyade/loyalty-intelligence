@@ -1,6 +1,7 @@
 const fs = require('fs');
 
 const HF_TOKEN = process.env.HF_TOKEN;
+const DATA_FILE = 'data.json';
 
 const systemPrompt = `You are a senior loyalty, CRM and customer engagement strategy consultant supporting Epsilon teams advising Flying Blue.
 Generate a comprehensive strategic intelligence report for today.
@@ -43,58 +44,102 @@ function extractJson(text) {
   return text.substring(firstBrace, lastBrace + 1);
 }
 
-async function main() {
-  const today = new Date().toISOString().split('T')[0];
-
-  if (!HF_TOKEN) {
-    console.error("HF_TOKEN non configuré. Génération via le moteur interne...");
-    generateFallbackData(today);
-    return;
-  }
-
-  try {
-    console.log("Interrogation du modèle Hugging Face Llama 3...");
-    const response = await fetch(
-      "https://api-inference.huggingface.co/models/meta-llama/Llama-3.2-3B-Instruct/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${HF_TOKEN}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          model: "meta-llama/Llama-3.2-3B-Instruct",
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: `Provide 6 rich, detailed strategic loyalty insights for ${today} covering SAS EuroBonus, Flying Blue, Finnair Plus, Delta SkyMiles, and United MileagePlus.` }
-          ],
-          max_tokens: 2500,
-          temperature: 0.7
-        })
-      }
-    );
-
-    if (!response.ok) {
-      const err = await response.text();
-      throw new Error(`Erreur API Hugging Face ${response.status}: ${err}`);
+// Fonction pour lire l'historique existant
+function loadExistingData() {
+  if (fs.existsSync(DATA_FILE)) {
+    try {
+      const raw = fs.readFileSync(DATA_FILE, 'utf8');
+      return JSON.parse(raw);
+    } catch (e) {
+      console.warn("Impossible de lire data.json existant, création d'un nouveau fichier.");
     }
-
-    const data = await response.json();
-    const rawContent = data.choices[0].message.content;
-    const cleanJson = extractJson(rawContent);
-
-    JSON.parse(cleanJson);
-    fs.writeFileSync('data.json', cleanJson);
-    console.log("✅ data.json mis à jour avec succès via Hugging Face !");
-
-  } catch (error) {
-    console.warn("Échec de l'appel API, bascule sur la génération du rapport structuré :", error.message);
-    generateFallbackData(today);
   }
+  return { date: "", executive_summary: {}, insights: [] };
 }
 
-function generateFallbackData(today) {
-  const fallbackReport = {
+// Fonction pour fusionner les nouveaux insights avec l'historique (sans doublons de titre)
+function mergeData(existingData, newReport) {
+  const existingInsights = existingData.insights || [];
+  const newInsights = newReport.insights || [];
+
+  // Trouver le dernier ID utilisé
+  let maxId = existingInsights.reduce((max, item) => Math.max(max, item.id || 0), 0);
+
+  // Filtrer les doublons basés sur le titre
+  const existingTitles = new Set(existingInsights.map(i => i.title.toLowerCase().trim()));
+  const freshInsights = [];
+
+  for (const item of newInsights) {
+    if (!existingTitles.has(item.title.toLowerCase().trim())) {
+      maxId += 1;
+      item.id = maxId; // Assurer un ID unique continu
+      freshInsights.push(item);
+    }
+  }
+
+  // Les nouveaux insights sont placés au début de la liste (ordre antéchronologique)
+  const combinedInsights = [...freshInsights, ...existingInsights];
+
+  return {
+    date: newReport.date || new Date().toISOString().split('T')[0],
+    executive_summary: newReport.executive_summary || existingData.executive_summary,
+    insights: combinedInsights
+  };
+}
+
+async function main() {
+  const today = new Date().toISOString().split('T')[0];
+  const existingData = loadExistingData();
+  let newReport = null;
+
+  if (HF_TOKEN) {
+    try {
+      console.log("Interrogation du modèle Hugging Face Llama 3...");
+      const response = await fetch(
+        "https://api-inference.huggingface.co/models/meta-llama/Llama-3.2-3B-Instruct/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${HF_TOKEN}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            model: "meta-llama/Llama-3.2-3B-Instruct",
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: `Provide 6 rich, detailed strategic loyalty insights for ${today} covering SAS EuroBonus, Flying Blue, Finnair Plus, Delta SkyMiles, and United MileagePlus.` }
+            ],
+            max_tokens: 2500,
+            temperature: 0.7
+          })
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        const rawContent = data.choices[0].message.content;
+        const cleanJson = extractJson(rawContent);
+        newReport = JSON.parse(cleanJson);
+      }
+    } catch (error) {
+      console.warn("Fallback vers le générateur structuré :", error.message);
+    }
+  }
+
+  // Si l'API échoue ou n'est pas configurée, on génère un lot d'enrichissement
+  if (!newReport) {
+    newReport = getFallbackReport(today);
+  }
+
+  // Fusion avec la base de données existante
+  const updatedData = mergeData(existingData, newReport);
+
+  fs.writeFileSync(DATA_FILE, JSON.stringify(updatedData, null, 2));
+  console.log(`✅ Base d'insights mise à jour ! Total d'articles en mémoire : ${updatedData.insights.length}`);
+}
+
+function getFallbackReport(today) {
+  return {
     date: today,
     executive_summary: {
       top_opportunity: "Déploiement de micro-abonnements mensuels pour l'accès aux salons et le surclassement prioritaire sur les lignes régionales.",
@@ -201,9 +246,6 @@ function generateFallbackData(today) {
       }
     ]
   };
-
-  fs.writeFileSync('data.json', JSON.stringify(fallbackReport, null, 2));
-  console.log("✅ data.json généré avec succès (Rapport complet 6 insights) !");
 }
 
 main();
