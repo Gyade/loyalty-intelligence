@@ -1,0 +1,27 @@
+{
+  "date": "2026-08-25",
+  "executive_summary": {
+    "top_opportunity": "Adoption d'un modèle d'abonnement payant pour le statut Elite par une compagnie nordique.",
+    "key_risk": "Dévaluation massive des points sur les vols partenaires en zone EMEA.",
+    "most_inspiring_idea": "Gamification des badges éco-responsables convertibles en XP de statut.",
+    "weak_signal_to_watch": "Intégration de bots IA autonomes pour la réclamation automatique d'avios non crédités."
+  },
+  "insights": [
+    {
+      "id": 1,
+      "title": "Finnair Plus introduit des défis gamifiés dynamiques",
+      "category": "Airline Loyalty",
+      "region": "Nordics",
+      "strategic_relevance": 5,
+      "recommendation_potential": 4,
+      "what_happened": "Finnair lance des quêtes personnalisées dans son application mobile permettant de gagner des Avios bonus.",
+      "why_it_matters": "Passage d'une fidélité purement transactionnelle à une fidélité comportementale et engagée.",
+      "potential_relevance": "Directement transférable sur l'écosystème Flying Blue.",
+      "suggested_epsilon_use": "Proposer un atelier de gamification des parcours d'engagement pour Flying Blue.",
+      "source_name": "Finnair Newsroom",
+      "source_date": "2026-08-25",
+      "source_url": "https://company.finnair.com",
+      "verification_status": "Primary confirmed"
+    }
+  ]
+}
