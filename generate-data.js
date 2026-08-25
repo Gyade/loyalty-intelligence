@@ -7,6 +7,14 @@ if (!API_KEY) {
   process.exit(1);
 }
 
+// Liste de modèles 100 % gratuits avec fallback automatique
+const FREE_MODELS = [
+  "google/gemma-2-9b-it:free",
+  "qwen/qwen-2.5-72b-instruct:free",
+  "meta-llama/llama-3.1-8b-instruct:free",
+  "mistralai/mistral-7b-instruct:free"
+];
+
 const systemPrompt = `
 You are a senior loyalty, CRM and customer engagement strategy consultant supporting Epsilon teams advising Flying Blue.
 Generate a comprehensive strategic intelligence report.
@@ -47,60 +55,71 @@ Return ONLY raw valid JSON adhering strictly to this format:
 }
 `;
 
-// Fonction robuste pour extraire uniquement la structure JSON
 function extractJson(text) {
   const firstBrace = text.indexOf('{');
   const lastBrace = text.lastIndexOf('}');
   
   if (firstBrace === -1 || lastBrace === -1 || lastBrace < firstBrace) {
-    throw new Error("Aucune structure JSON valide trouvée dans la réponse de l'IA.");
+    throw new Error("Aucune structure JSON valide trouvée dans la réponse.");
   }
   
   return text.substring(firstBrace, lastBrace + 1);
 }
 
 async function main() {
-  try {
-    const today = new Date().toISOString().split('T')[0];
+  const today = new Date().toISOString().split('T')[0];
+  let lastError = null;
 
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: "meta-llama/llama-3.3-70b-instruct:free", // Modèle puissant, rapide et gratuit
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: `Generate the loyalty strategic report for ${today} with 6 rich insights across airline loyalty (SAS, Finnair, Flying Blue, Delta, etc.).` }
-        ]
-      })
-    });
+  for (const model of FREE_MODELS) {
+    try {
+      console.log(`Essai avec le modèle gratuit : ${model}...`);
+      
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: model,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: `Generate the loyalty strategic report for ${today} with 6 rich insights across airline loyalty (SAS, Finnair, Flying Blue, Delta, etc.).` }
+          ]
+        })
+      });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`API Error ${response.status}: ${errorText}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.warn(`Échec du modèle ${model} (${response.status}): ${errorText}`);
+        continue;
+      }
+
+      const data = await response.json();
+      
+      if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+        console.warn(`Réponse vide du modèle ${model}`);
+        continue;
+      }
+
+      const rawContent = data.choices[0].message.content;
+      const cleanJsonText = extractJson(rawContent);
+
+      // Validation JSON
+      JSON.parse(cleanJsonText);
+
+      fs.writeFileSync('data.json', cleanJsonText);
+      console.log(`✅ Succès avec le modèle ${model} ! data.json mis à jour.`);
+      return; // Succès, on sort de la boucle
+
+    } catch (error) {
+      console.warn(`Erreur lors du traitement avec ${model}:`, error.message);
+      lastError = error;
     }
-
-    const data = await response.json();
-    
-    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-      throw new Error("Réponse OpenRouter vide ou incomplète.");
-    }
-
-    const rawContent = data.choices[0].message.content;
-    const cleanJsonText = extractJson(rawContent);
-
-    // Validation syntaxique
-    JSON.parse(cleanJsonText);
-
-    fs.writeFileSync('data.json', cleanJsonText);
-    console.log('data.json mis à jour avec succès avec 6 insights riches !');
-  } catch (error) {
-    console.error('Erreur lors de la génération :', error);
-    process.exit(1);
   }
+
+  console.error(' Tous les modèles gratuits ont échoué.');
+  process.exit(1);
 }
 
 main();
