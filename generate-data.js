@@ -1,14 +1,11 @@
 const fs = require('fs');
 
-const API_KEY = process.env.GEMINI_API_KEY;
+const API_KEY = process.env.OPENROUTER_API_KEY;
 
 if (!API_KEY) {
-  console.error("Erreur : La clé GEMINI_API_KEY n'est pas configurée dans les secrets GitHub.");
+  console.error("Erreur : La clé OPENROUTER_API_KEY n'est pas configurée dans GitHub.");
   process.exit(1);
 }
-
-// Utilisation de l'endpoint stable v1beta
-const URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`;
 
 const systemPrompt = `
 You are a senior loyalty, CRM and customer engagement strategy consultant supporting Epsilon teams that advise Flying Blue.
@@ -52,22 +49,20 @@ async function main() {
   try {
     const today = new Date().toISOString().split('T')[0];
 
-    const payload = {
-      systemInstruction: {
-        parts: [{ text: systemPrompt }]
+    // Endpoint OpenRouter standard OpenAI-compatible
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${API_KEY}`,
+        "Content-Type": "application/json"
       },
-      contents: [{
-        parts: [{ text: `Generate the daily loyalty intelligence report for ${today}. Provide strategic insights on airline loyalty, CRM innovation, and Nordic programs.` }]
-      }],
-      generationConfig: {
-        responseMimeType: "application/json"
-      }
-    };
-
-    const response = await fetch(URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify({
+        model: "openrouter/free", // Redirige automatiquement vers le meilleur modèle gratuit actif
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: `Generate the daily loyalty intelligence report for ${today}. Provide strategic insights on airline loyalty, CRM innovation, and Nordic programs.` }
+        ]
+      })
     });
 
     if (!response.ok) {
@@ -76,22 +71,18 @@ async function main() {
     }
 
     const data = await response.json();
-    
-    if (!data.candidates || !data.candidates[0].content.parts[0].text) {
-      throw new Error("Réponse API invalide ou vide.");
-    }
+    let jsonText = data.choices[0].message.content.trim();
 
-    let jsonText = data.candidates[0].content.parts[0].text.trim();
-
+    // Nettoyage au cas où des balises ```json soient présentes
     if (jsonText.startsWith('```')) {
       jsonText = jsonText.replace(/^```json\s*/, '').replace(/^```\s*/, '').replace(/```$/, '');
     }
 
-    // Validation syntaxique du JSON
+    // Validation du format JSON
     JSON.parse(jsonText);
 
     fs.writeFileSync('data.json', jsonText);
-    console.log('data.json mis à jour avec succès !');
+    console.log('data.json mis à jour avec succès via OpenRouter !');
   } catch (error) {
     console.error('Erreur lors de la génération :', error);
     process.exit(1);
