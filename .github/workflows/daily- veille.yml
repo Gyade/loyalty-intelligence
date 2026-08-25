@@ -2,24 +2,20 @@ name: Daily Loyalty Intelligence Fetch
 
 on:
   schedule:
-    # S'exécute tous les jours à 06:00 UTC (07:00 ou 08:00 heure française)
     - cron: '0 6 * * *'
-  workflow_dispatch: # Permet d'exécuter la veille manuellement via un bouton
+  workflow_dispatch:
 
 jobs:
   build-and-update:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: '18'
-
-      - name: Install dependencies
-        run: npm install @google/genai
+          node-version: '20'
 
       - name: Fetch Intelligence with Gemini
         env:
