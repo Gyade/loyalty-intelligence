@@ -3,43 +3,42 @@ const fs = require('fs');
 const API_KEY = process.env.OPENROUTER_API_KEY;
 
 if (!API_KEY) {
-  console.error("Erreur : La clé OPENROUTER_API_KEY n'est pas configurée.");
+  console.error("Erreur : La clé OPENROUTER_API_KEY n'est pas configurée dans GitHub.");
   process.exit(1);
 }
 
 const systemPrompt = `
-You are a senior loyalty, CRM and customer engagement strategy consultant supporting Epsilon teams that advise Flying Blue.
-Your objective is to produce a comprehensive, dense, high-value strategic intelligence report.
+You are a senior loyalty, CRM and customer engagement strategy consultant supporting Epsilon teams advising Flying Blue.
+Generate a comprehensive strategic intelligence report.
 
-CRITICAL REQUIREMENT FOR QUANTITY AND DIVERSITY:
-- You MUST generate between 5 and 8 rich, highly detailed insights for every report.
-- Strictly cover diverse regions: Nordics (SAS, Finnair, Norwegian, Strawberry), Europe (Flying Blue, Miles&More, BA), Americas (Delta, United, AA), Middle East / APAC (Emirates, Qatar, Qantas).
-- Highlight specific CRM actions, loyalty economics, co-brand strategy shifts, and weak signals.
+CRITICAL REQUIREMENT:
+- Generate 6 distinct, rich strategic loyalty insights.
+- Regions to cover: Nordics, Europe, North America, Middle East / APAC.
+- Topics: Loyalty economics, Co-brand strategy, Status perks, CRM innovations.
 
-Scoring: Assign Strategic Relevance (1-5) and Recommendation Potential (1-5). Include insights scoring 3/5 or higher.
-
-OUTPUT FORMAT: Return ONLY a valid JSON object matching this exact structure (no markdown, no triple backticks):
+OUTPUT FORMAT:
+Return ONLY raw valid JSON adhering strictly to this format:
 {
   "date": "YYYY-MM-DD",
   "executive_summary": {
-    "top_opportunity": "Detailed description of top opportunity...",
-    "key_risk": "Detailed description of key risk...",
-    "most_inspiring_idea": "Detailed description of inspiring idea...",
-    "weak_signal_to_watch": "Detailed description of weak signal..."
+    "top_opportunity": "...",
+    "key_risk": "...",
+    "most_inspiring_idea": "...",
+    "weak_signal_to_watch": "..."
   },
   "insights": [
     {
       "id": 1,
-      "title": "Title of Insight",
-      "category": "Airline Loyalty / CRM / Co-Brand",
-      "region": "Nordics / Europe / North America / APAC / Middle East",
+      "title": "...",
+      "category": "Airline Loyalty",
+      "region": "Nordics",
       "strategic_relevance": 5,
       "recommendation_potential": 4,
-      "what_happened": "Thorough explanation of the strategic move or announcement.",
-      "why_it_matters": "Deep consulting analysis of why this changes loyalty dynamics or CRM engagement.",
-      "potential_relevance": "Direct impact or trend assessment.",
-      "suggested_epsilon_use": "Concrete recommendation, workshop topic, or benchmark application for Epsilon / Flying Blue.",
-      "source_name": "Source Name (e.g. Airline News, AwardFares, LoyaltyLobby)",
+      "what_happened": "...",
+      "why_it_matters": "...",
+      "potential_relevance": "...",
+      "suggested_epsilon_use": "...",
+      "source_name": "...",
       "source_date": "YYYY-MM-DD",
       "source_url": "https://...",
       "verification_status": "Primary confirmed"
@@ -47,6 +46,18 @@ OUTPUT FORMAT: Return ONLY a valid JSON object matching this exact structure (no
   ]
 }
 `;
+
+// Fonction robuste pour extraire uniquement la structure JSON
+function extractJson(text) {
+  const firstBrace = text.indexOf('{');
+  const lastBrace = text.lastIndexOf('}');
+  
+  if (firstBrace === -1 || lastBrace === -1 || lastBrace < firstBrace) {
+    throw new Error("Aucune structure JSON valide trouvée dans la réponse de l'IA.");
+  }
+  
+  return text.substring(firstBrace, lastBrace + 1);
+}
 
 async function main() {
   try {
@@ -59,10 +70,10 @@ async function main() {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "openrouter/free",
+        model: "meta-llama/llama-3.3-70b-instruct:free", // Modèle puissant, rapide et gratuit
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: `Generate a full, dense Loyalty Strategy & Intelligence Report for ${today}. Include at least 6 distinct strategic loyalty developments across Nordics, Europe, US, and APAC programs (e.g., Status Credit Rollovers, Co-brand card updates, Dynamic pricing, AI personalization).` }
+          { role: "user", content: `Generate the loyalty strategic report for ${today} with 6 rich insights across airline loyalty (SAS, Finnair, Flying Blue, Delta, etc.).` }
         ]
       })
     });
@@ -73,17 +84,19 @@ async function main() {
     }
 
     const data = await response.json();
-    let jsonText = data.choices[0].message.content.trim();
-
-    if (jsonText.startsWith('```')) {
-      jsonText = jsonText.replace(/^```json\s*/, '').replace(/^```\s*/, '').replace(/```$/, '');
+    
+    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+      throw new Error("Réponse OpenRouter vide ou incomplète.");
     }
 
-    // Validation du JSON
-    JSON.parse(jsonText);
+    const rawContent = data.choices[0].message.content;
+    const cleanJsonText = extractJson(rawContent);
 
-    fs.writeFileSync('data.json', jsonText);
-    console.log('data.json mis à jour avec succès avec un rapport enrichi !');
+    // Validation syntaxique
+    JSON.parse(cleanJsonText);
+
+    fs.writeFileSync('data.json', cleanJsonText);
+    console.log('data.json mis à jour avec succès avec 6 insights riches !');
   } catch (error) {
     console.error('Erreur lors de la génération :', error);
     process.exit(1);
