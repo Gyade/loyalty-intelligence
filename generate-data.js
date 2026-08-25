@@ -1,7 +1,13 @@
-const { GoogleGenAI } = require('@google/genai');
 const fs = require('fs');
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const API_KEY = process.env.GEMINI_API_KEY;
+
+if (!API_KEY) {
+  console.error("Erreur : La clé GEMINI_API_KEY n'est pas configurée dans les secrets GitHub.");
+  process.exit(1);
+}
+
+const URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`;
 
 const systemPrompt = `
 You are a senior loyalty, CRM and customer engagement strategy consultant supporting Epsilon teams that advise Flying Blue.
@@ -34,7 +40,7 @@ OUTPUT FORMAT: Return ONLY a valid JSON object matching this exact structure, wi
       "suggested_epsilon_use": "...",
       "source_name": "...",
       "source_date": "YYYY-MM-DD",
-      "source_url": "...",
+      "source_url": "https://...",
       "verification_status": "Primary confirmed"
     }
   ]
@@ -44,21 +50,51 @@ OUTPUT FORMAT: Return ONLY a valid JSON object matching this exact structure, wi
 async function main() {
   try {
     const today = new Date().toISOString().split('T')[0];
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: `Generate the daily loyalty intelligence report for ${today}. Conduct web research for the latest news in airline loyalty, CRM, and Nordic travel programs over the past 24-48 hours.`,
-      config: {
-        systemInstruction: systemPrompt,
-        tools: [{ googleSearch: {} }],
+
+    const payload = {
+      systemInstruction: {
+        parts: [{ text: systemPrompt }]
+      },
+      contents: [{
+        parts: [{ text: `Generate the daily loyalty intelligence report for ${today}. Conduct web research for the latest news in airline loyalty, CRM, and Nordic travel programs over the past 24-48 hours.` }]
+      }],
+      generationConfig: {
         responseMimeType: "application/json"
-      }
+      },
+      tools: [{ googleSearch: {} }]
+    };
+
+    const response = await fetch(URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
     });
 
-    const jsonText = response.text.trim();
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`API Error ${response.status}: ${errorText}`);
+    }
+
+    const data = await response.json();
+    
+    if (!data.candidates || !data.candidates[0].content.parts[0].text) {
+      throw new Error("Réponse API invalide ou vide.");
+    }
+
+    let jsonText = data.candidates[0].content.parts[0].text.trim();
+
+    // Nettoyage au cas où des balises markdown sont renvoyées
+    if (jsonText.startsWith('```')) {
+      jsonText = jsonText.replace(/^```json\s*/, '').replace(/^```\s*/, '').replace(/```$/, '');
+    }
+
+    // Validation syntaxique du JSON
+    JSON.parse(jsonText);
+
     fs.writeFileSync('data.json', jsonText);
-    console.log('data.json successfully updated!');
+    console.log('data.json mis à jour avec succès !');
   } catch (error) {
-    console.error('Error generating report:', error);
+    console.error('Erreur lors de la génération :', error);
     process.exit(1);
   }
 }
