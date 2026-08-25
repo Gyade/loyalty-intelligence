@@ -17,9 +17,9 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Fetch Intelligence with Gemini
+      - name: Fetch Intelligence with OpenRouter
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: node generate-data.js
 
       - name: Commit and push changes
