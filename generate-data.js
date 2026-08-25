@@ -7,7 +7,7 @@ if (!API_KEY) {
   process.exit(1);
 }
 
-// Utilisation de gemini-2.5-flash via l'alias d'API v1beta
+// Utilisation de l'endpoint stable v1beta
 const URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`;
 
 const systemPrompt = `
@@ -57,7 +57,7 @@ async function main() {
         parts: [{ text: systemPrompt }]
       },
       contents: [{
-        parts: [{ text: `Generate the daily loyalty intelligence report for ${today}. Conduct web research for the latest news in airline loyalty, CRM, and Nordic travel programs over the past 24-48 hours.` }]
+        parts: [{ text: `Generate the daily loyalty intelligence report for ${today}. Provide strategic insights on airline loyalty, CRM innovation, and Nordic programs.` }]
       }],
       generationConfig: {
         responseMimeType: "application/json"
@@ -87,6 +87,7 @@ async function main() {
       jsonText = jsonText.replace(/^```json\s*/, '').replace(/^```\s*/, '').replace(/```$/, '');
     }
 
+    // Validation syntaxique du JSON
     JSON.parse(jsonText);
 
     fs.writeFileSync('data.json', jsonText);
