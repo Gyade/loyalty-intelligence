@@ -1,38 +1,183 @@
-<script>
-  // 1. Déclaration des clés Supabase
-  const SUPABASE_URL = "https://medxfuihhtahojtlvevh.supabase.co";
-  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1lZHhmdWloaHRhaG9qdGx2ZXZoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc2Njc4NzIsImV4cCI6MjEwMzI0Mzg3Mn0.0-bIKkoRPCN6O_Mg9gEGljepYUvA0bubm4ARmRKshgI";
-
-  // 2. Fonction de chargement dynamique depuis la base Supabase
-  async function loadInsights() {
-    try {
-      const response = await fetch(`${SUPABASE_URL}/rest/v1/insights?select=*&order=created_at.desc`, {
-        headers: {
-          "apikey": SUPABASE_ANON_KEY,
-          "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Erreur Supabase HTTP: ${response.status}`);
-      }
-
-      const insights = await response.json();
-      console.log("Données reçues de Supabase :", insights);
-      
-      // Appel de votre fonction d'affichage existante
-      if (typeof renderCards === "function") {
-        renderCards(insights);
-      } else if (typeof renderInsights === "function") {
-        renderInsights(insights);
-      } else {
-        console.warn("Aucune fonction 'renderCards' ou 'renderInsights' trouvée pour afficher les données.");
-      }
-    } catch (e) {
-      console.error("Erreur lors du chargement des données depuis Supabase :", e);
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Loyalty & CRM Intelligence</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #f4f6f9;
+      color: #333;
+      margin: 0;
+      padding: 20px;
     }
-  }
+    header {
+      max-width: 1200px;
+      margin: 0 auto 30px auto;
+      text-align: center;
+    }
+    h1 {
+      color: #1a2b4c;
+      margin-bottom: 8px;
+    }
+    p.subtitle {
+      color: #666;
+      font-size: 1.1em;
+    }
+    #insights-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 20px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .card {
+      background: #ffffff;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+      border-top: 4px solid #0052cc;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .badge {
+      background: #e6f0ff;
+      color: #0052cc;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 0.8em;
+      font-weight: bold;
+    }
+    .region {
+      font-size: 0.8em;
+      color: #888;
+    }
+    .card-title {
+      font-size: 1.2em;
+      margin: 0 0 12px 0;
+      color: #111;
+    }
+    .card-section {
+      margin-bottom: 10px;
+      font-size: 0.9em;
+      line-height: 1.4;
+    }
+    .card-section strong {
+      color: #444;
+      display: block;
+      margin-bottom: 2px;
+    }
+    .card-footer {
+      margin-top: 15px;
+      padding-top: 10px;
+      border-top: 1px solid #eee;
+      font-size: 0.8em;
+      display: flex;
+      justify-content: space-between;
+    }
+    .card-footer a {
+      color: #0052cc;
+      text-decoration: none;
+      font-weight: bold;
+    }
+    .loading, .error {
+      text-align: center;
+      grid-column: 1 / -1;
+      padding: 40px;
+      font-size: 1.2em;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
 
-  // 3. Lancement au chargement de la page
-  document.addEventListener("DOMContentLoaded", loadInsights);
-</script>
+  <header>
+    <h1>Strategic Loyalty Intelligence</h1>
+    <p class="subtitle">Flying Blue & Epsilon Daily Strategic Watch</p>
+  </header>
+
+  <main id="insights-grid">
+    <div class="loading">Chargement des insights depuis Supabase...</div>
+  </main>
+
+  <script>
+    const SUPABASE_URL = "https://medxfuihhtahojtlvevh.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1lZHhmdWloaHRhaG9qdGx2ZXZoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc2Njc4NzIsImV4cCI6MjEwMzI0Mzg3Mn0.0-bIKkoRPCN6O_Mg9gEGljepYUvA0bubm4ARmRKshgI";
+
+    async function loadInsights() {
+      const container = document.getElementById('insights-grid');
+      
+      try {
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/insights?select=*&order=created_at.desc`, {
+          headers: {
+            "apikey": SUPABASE_ANON_KEY,
+            "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Erreur réseau: ${response.status}`);
+        }
+
+        const insights = await response.json();
+        
+        if (!insights || insights.length === 0) {
+          container.innerHTML = '<div class="loading">Aucun insight disponible pour le moment. Exécutez le script GitHub Actions pour alimenter la base !</div>';
+          return;
+        }
+
+        container.innerHTML = ''; // Vider le message de chargement
+
+        insights.forEach(item => {
+          const card = document.createElement('div');
+          card.className = 'card';
+          card.innerHTML = `
+            <div>
+              <div class="card-header">
+                <span class="badge">${item.category || 'Loyalty'}</span>
+                <span class="region">${item.region || 'Global'}</span>
+              </div>
+              <h2 class="card-title">${item.title}</h2>
+              
+              <div class="card-section">
+                <strong>What happened:</strong>
+                ${item.what_happened || 'N/A'}
+              </div>
+
+              <div class="card-section">
+                <strong>Why it matters:</strong>
+                ${item.why_it_matters || 'N/A'}
+              </div>
+
+              <div class="card-section">
+                <strong>Suggested Epsilon Use:</strong>
+                ${item.suggested_epsilon_use || 'N/A'}
+              </div>
+            </div>
+
+            <div class="card-footer">
+              <span>Source: ${item.source_name || 'Web'}</span>
+              ${item.source_url ? `<a href="${item.source_url}" target="_blank">Lire la source ↗</a>` : ''}
+            </div>
+          `;
+          container.appendChild(card);
+        });
+
+      } catch (err) {
+        console.error("Erreur Supabase:", err);
+        container.innerHTML = `<div class="error">Impossible de charger les cartes.<br><small>${err.message}</small></div>`;
+      }
+    }
+
+    document.addEventListener("DOMContentLoaded", loadInsights);
+  </script>
+</body>
+</html>
