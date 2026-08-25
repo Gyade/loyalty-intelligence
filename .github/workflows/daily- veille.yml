@@ -1,0 +1,35 @@
+name: Daily Loyalty Intelligence Fetch
+
+on:
+  schedule:
+    # S'exécute tous les jours à 06:00 UTC (07:00 ou 08:00 heure française)
+    - cron: '0 6 * * *'
+  workflow_dispatch: # Permet d'exécuter la veille manuellement via un bouton
+
+jobs:
+  build-and-update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm install @google/genai
+
+      - name: Fetch Intelligence with Gemini
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: node generate-data.js
+
+      - name: Commit and push changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add data.json
+          git commit -m "Auto-update daily loyalty report [skip ci]" || exit 0
+          git push
