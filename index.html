@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Loyalty Intelligence & Strategy</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-slate-50 text-slate-900 font-sans antialiased min-h-screen">
+
+  <!-- Header -->
+  <header class="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+      <div>
+        <h1 class="text-xl font-bold tracking-tight text-amber-400"><i class="fa-solid fa-plane-departure mr-2"></i>Loyalty Intelligence</h1>
+        <p class="text-xs text-slate-400">Veille stratégique, CRM & Innovation Fidélité Aérienne</p>
+      </div>
+      <!-- Barre de recherche -->
+      <div class="relative w-full md:w-96">
+        <input type="text" id="searchInput" placeholder="Rechercher (ex: Finnair, co-brand, IA...)" 
+               class="w-full bg-slate-800 border border-slate-700 rounded-lg pl-10 pr-4 py-2 text-sm text-white placeholder-slate-400 focus:outline-none focus:border-amber-400">
+        <i class="fa-solid fa-search absolute left-3 top-3 text-slate-400 text-sm"></i>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 py-8 space-y-8">
+
+    <!-- Cartouche Veille du Jour (Hero Section) -->
+    <section id="heroSection" class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+      <div class="bg-gradient-to-r from-slate-900 to-slate-800 p-6 text-white flex justify-between items-center">
+        <div>
+          <span class="bg-amber-400 text-slate-900 text-xs font-bold px-2.5 py-1 rounded uppercase tracking-wider">Dernier Rapport</span>
+          <h2 id="reportDate" class="text-2xl font-bold mt-2">Chargement du rapport...</h2>
+        </div>
+        <i class="fa-solid fa-newspaper text-4xl text-slate-700"></i>
+      </div>
+      
+      <div class="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4" id="execSummaryGrid">
+        <!-- Rempli dynamiquement par JS -->
+      </div>
+    </section>
+
+    <!-- Filtres -->
+    <section class="flex flex-wrap gap-4 items-center justify-between bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
+      <div class="flex flex-wrap gap-2 items-center text-sm">
+        <span class="font-semibold text-slate-700 mr-2"><i class="fa-solid fa-filter mr-1"></i>Filtres :</span>
+        
+        <select id="regionFilter" class="bg-slate-100 border border-slate-300 rounded-md px-3 py-1.5 text-slate-700 focus:outline-none">
+          <option value="">Toutes les régions</option>
+          <option value="Nordics">Focus Nordique</option>
+          <option value="Europe">Europe</option>
+          <option value="North America">Amérique du Nord</option>
+          <option value="Middle East">Moyen-Orient</option>
+          <option value="Asia-Pacific">Asie-Pacifique</option>
+        </select>
+
+        <select id="scoreFilter" class="bg-slate-100 border border-slate-300 rounded-md px-3 py-1.5 text-slate-700 focus:outline-none">
+          <option value="0">Toutes les notes</option>
+          <option value="4">Score ≥ 4/5</option>
+          <option value="5">Score 5/5 uniquement</option>
+        </select>
+      </div>
+      <div id="resultCount" class="text-xs font-medium text-slate-500">0 insight(s) trouvé(s)</div>
+    </section>
+
+    <!-- Grille des Insights -->
+    <section>
+      <h3 class="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+        <i class="fa-solid fa-lightbulb text-amber-500"></i> Base d'Insights Stratégiques
+      </h3>
+      <div id="insightsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <!-- Les cartes d'insights seront générées ici -->
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    let allData = null;
+
+    // Charger les données du fichier JSON
+    async function loadData() {
+      try {
+        const response = await fetch('data.json');
+        allData = await response.json();
+        renderHero(allData);
+        renderInsights(allData.insights);
+      } catch (error) {
+        console.error("Erreur lors du chargement des données:", error);
+        document.getElementById('reportDate').innerText = "Aucun rapport disponible pour le moment";
+      }
+    }
+
+    // Afficher l'Executive Summary
+    function renderHero(data) {
+      document.getElementById('reportDate').innerText = `Veille du ${data.date}`;
+      const summary = data.executive_summary;
+      const grid = document.getElementById('execSummaryGrid');
+      
+      const items = [
+        { title: "Top Opportunity", desc: summary.top_opportunity, icon: "fa-rocket", color: "text-emerald-600", bg: "bg-emerald-50" },
+        { title: "Key Risk", desc: summary.key_risk, icon: "fa-triangle-exclamation", color: "text-rose-600", bg: "bg-rose-50" },
+        { title: "Most Inspiring Idea", desc: summary.most_inspiring_idea, icon: "fa-lightbulb", color: "text-amber-600", bg: "bg-amber-50" },
+        { title: "Weak Signal", desc: summary.weak_signal_to_watch, icon: "fa-satellite-dish", color: "text-indigo-600", bg: "bg-indigo-50" }
+      ];
+
+      grid.innerHTML = items.map(item => `
+        <div class="${item.bg} p-4 rounded-lg border border-slate-100">
+          <div class="flex items-center gap-2 ${item.color} font-bold text-xs uppercase tracking-wide mb-2">
+            <i class="fa-solid ${item.icon}"></i> ${item.title}
+          </div>
+          <p class="text-sm text-slate-800 font-medium">${item.desc}</p>
+        </div>
+      `).join('');
+    }
+
+    // Afficher les cartes d'insights
+    function renderInsights(insights) {
+      const grid = document.getElementById('insightsGrid');
+      document.getElementById('resultCount').innerText = `${insights.length} insight(s) affiché(s)`;
+
+      if (insights.length === 0) {
+        grid.innerHTML = `<p class="col-span-full text-center text-slate-500 py-8">Aucun insight ne correspond à votre recherche.</p>`;
+        return;
+      }
+
+      grid.innerHTML = insights.map(item => `
+        <article class="bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition flex flex-col justify-between p-5">
+          <div>
+            <div class="flex justify-between items-start gap-2 mb-3">
+              <span class="bg-slate-100 text-slate-700 text-xs font-semibold px-2.5 py-1 rounded">${item.region}</span>
+              <div class="flex gap-2 text-xs font-bold">
+                <span class="bg-amber-100 text-amber-800 px-2 py-0.5 rounded" title="Strategic Relevance">Rel: ${item.strategic_relevance}/5</span>
+                <span class="bg-blue-100 text-blue-800 px-2 py-0.5 rounded" title="Recommendation Potential">Rec: ${item.recommendation_potential}/5</span>
+              </div>
+            </div>
+
+            <h4 class="font-bold text-slate-900 text-base mb-2">${item.title}</h4>
+            
+            <div class="space-y-3 text-xs text-slate-600 mb-4">
+              <div><strong class="text-slate-800">What Happened:</strong> ${item.what_happened}</div>
+              <div><strong class="text-slate-800">Why It Matters:</strong> ${item.why_it_matters}</div>
+              <div class="bg-amber-50/50 p-2.5 rounded border border-amber-100">
+                <strong class="text-amber-900">Suggested Epsilon Use:</strong> ${item.suggested_epsilon_use}
+              </div>
+            </div>
+          </div>
+
+          <div class="pt-3 border-t border-slate-100 flex justify-between items-center text-xs text-slate-400">
+            <span>${item.source_name} • ${item.source_date}</span>
+            <a href="${item.source_url}" target="_blank" class="text-amber-600 hover:underline font-medium">Source <i class="fa-solid fa-external-link text-[10px]"></i></a>
+          </div>
+        </article>
+      `).join('');
+    }
+
+    // Filtrage dynamique
+    function filterData() {
+      if (!allData) return;
+      const search = document.getElementById('searchInput').value.toLowerCase();
+      const region = document.getElementById('regionFilter').value;
+      const minScore = parseInt(document.getElementById('scoreFilter').value);
+
+      const filtered = allData.insights.filter(item => {
+        const matchesSearch = item.title.toLowerCase().includes(search) || 
+                              item.what_happened.toLowerCase().includes(search) ||
+                              item.why_it_matters.toLowerCase().includes(search);
+        const matchesRegion = !region || item.region === region;
+        const matchesScore = item.strategic_relevance >= minScore || item.recommendation_potential >= minScore;
+        
+        return matchesSearch && matchesRegion && matchesScore;
+      });
+
+      renderInsights(filtered);
+    }
+
+    document.getElementById('searchInput').addEventListener('input', filterData);
+    document.getElementById('regionFilter').addEventListener('change', filterData);
+    document.getElementById('scoreFilter').addEventListener('change', filterData);
+
+    loadData();
+  </script>
+</body>
+</html>
