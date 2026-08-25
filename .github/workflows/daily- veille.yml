@@ -1,4 +1,4 @@
-name: Daily Loyalty Intelligence Fetch
+name: Daily Loyalty Intelligence Refresh
 
 on:
   schedule:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-and-update:
+  refresh:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -17,15 +17,9 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Fetch Intelligence with OpenRouter
+      - name: Run generation script
         env:
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: node generate-data.js
-
-      - name: Commit and push changes
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add data.json
-          git commit -m "Auto-update daily loyalty report [skip ci]" || exit 0
-          git push
