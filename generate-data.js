@@ -99,7 +99,7 @@ Generate a strategic intelligence report in ENGLISH ONLY. Return ONLY RAW VALID 
 
   // Utilisation de la nouvelle adresse du Router d'inférence de Hugging Face
   const HF_ENDPOINT = "https://router.huggingface.co/hf-inference/v1/chat/completions";
-  const MODEL_NAME = "Qwen/Qwen2.5-Coder-32B-Instruct";
+  const MODEL_NAME = "meta-llama/Llama-3.2-3B-Instruct";
 
   const payload = {
     model: MODEL_NAME,
