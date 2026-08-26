@@ -6,13 +6,13 @@ const { GoogleGenAI } = require('@google/genai');
 const WebSocket = require('ws');
 
 const parser = new Parser();
+
 const supabase = createClient(
     process.env.SUPABASE_URL, 
     process.env.SUPABASE_SERVICE_KEY, 
     { auth: { persistSession: false }, realtime: { transport: WebSocket } }
 );
 
-// Initialisation de Gemini
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 async function fetchRssFeed(url) {
@@ -30,19 +30,33 @@ async function fetchRssFeed(url) {
     }
 }
 
+// Fonction pour filtrer le bruit évident en amont (ex: promos de cartes, forums, faits divers)
+function isIrrelevantTitle(title) {
+    const lower = title.toLowerCase();
+    const blacklist = [
+        'bonus', 'sign-up', 'sign up', 'review:', 'win 1 million', 'bits:', 
+        'chat thread', 'forum', 'deal', 'sale', 'save the points', 'credit card',
+        'esim', 'railcards', 'lounge closed', 'kicked them both off', 'runs toward active runway'
+    ];
+    return blacklist.some(term => lower.includes(term));
+}
+
 async function analyzeWithGemini(article) {
     const prompt = `You are a senior loyalty and CRM strategy consultant for Flying Blue / Epsilon.
 Analyze the following article originating from the industry source '${article.source_name}'. 
-Maintain a balanced global perspective.
-Return STRICTLY a valid JSON object (no markdown formatting) with this exact structure:
+
+CRITICAL FILTERING RULE:
+If this article is just a minor credit card promotion, a sign-up bonus offer, a personal blog "bits/news round-up", a simple hotel review, or an irrelevant local news/incident without deep strategic impact on enterprise CRM, loyalty economics, or data/adtech ecosystems, you MUST return a JSON with "strategic_relevance": 1. 
+
+Otherwise, return a valid JSON object (no markdown formatting, no \`\`\`json) with this exact structure:
 {
   "title": "Clear, impactful strategic title in ENGLISH",
   "what_happened": "Concise summary of what happened in 2-3 sentences in ENGLISH.",
-  "why_it_matters": "Strategic analysis of why it matters for loyalty / CRM in ENGLISH.",
+  "why_it_matters": "Strategic analysis of why it matters for enterprise loyalty / CRM in ENGLISH.",
   "suggested_epsilon_use": "Actionable recommendation for CRM / personalization strategy in ENGLISH.",
   "category": "Airline Loyalty / CRM & Personalization / Co-Brand & Partners / Hospitality Loyalty / Data & AdTech",
-  "region": "Europe / North America / APAC / Middle East / Global",
-  "strategic_relevance": 4
+  "region": "Europe / North America /APAC / Middle East / Global",
+  "strategic_relevance": (number from 1 to 5. Put 1 or 2 if it's low interest, 4 or 5 if it's a major industry shift)
 }
 
 Article Title: ${article.title}
@@ -50,8 +64,8 @@ Article Content: ${article.summary}
 `;
 
     try {
-     const response = await ai.models.generateContent({
-            model: 'gemini-3.6-flash', // <-- Nouveau modèle conseillé
+        const response = await ai.models.generateContent({
+            model: 'gemini-3.6-flash',
             contents: prompt,
         });
 
@@ -70,7 +84,7 @@ Article Content: ${article.summary}
 }
 
 async function runFetcher() {
-    console.log("🚀 Lancement de la récupération avec Gemini...");
+    console.log("🚀 Lancement de la récupération intelligente avec Gemini...");
     
     let sources = [];
     try {
@@ -97,19 +111,21 @@ async function runFetcher() {
                 const pubDate = item.pubDate ? new Date(item.pubDate) : new Date();
                 if (pubDate < cutoffDate) continue;
 
+                // Filtrage rapide par mots-clés indésirables
+                if (isIrrelevantTitle(item.title)) {
+                    // console.log(`   ⏭️ Ignoré (bruit détecté) : ${item.title}`);
+                    continue;
+                }
+
                 const { data: existing, error: selectError } = await supabase
                     .from('insights')
                     .select('id')
                     .eq('url', link);
 
-                if (selectError) {
-                    console.error(`   ⚠️ Erreur select Supabase:`, selectError.message);
-                    continue;
-                }
-
+                if (selectError) continue;
                 if (existing && existing.length > 0) continue;
 
-                console.log(`   ✨ Nouvel article trouvé : ${item.title}`);
+                console.log(`   ✨ Analyse en cours : ${item.title}`);
                 
                 const articleData = {
                     source_name: source.name,
@@ -118,20 +134,13 @@ async function runFetcher() {
                 };
 
                 let aiRes = await analyzeWithGemini(articleData);
-                if (!aiRes) {
-                    // Mode de secours si Gemini échoue
-                    aiRes = {
-                        title: item.title,
-                        what_happened: articleData.summary.substring(0, 300),
-                        why_it_matters: "Imported via automated monitoring.",
-                        suggested_epsilon_use: "Review for CRM strategy.",
-                        category: "Airline Loyalty",
-                        region: source.region,
-                        strategic_relevance: 3
-                    };
+                
+                // Si l'IA estime que la pertinence est faible (< 3), on ignore l'insertion !
+                if (!aiRes || aiRes.strategic_relevance < 3) {
+                    console.log(`   ⏭️ Écarté par l'IA (Pertinence faible : ${aiRes ? aiRes.strategic_relevance : 'N/A'})`);
+                    continue;
                 }
 
-                // Utilisation de la colonne corrigée : why_it_matters
                 const record = {
                     title: aiRes.title || item.title,
                     what_happened: aiRes.what_happened || articleData.summary,
@@ -139,7 +148,7 @@ async function runFetcher() {
                     suggested_epsilon_use: aiRes.suggested_epsilon_use || "Leverage for lifecycle CRM.",
                     category: aiRes.category || "Airline Loyalty",
                     region: aiRes.region || source.region,
-                    strategic_relevance: aiRes.strategic_relevance || 3,
+                    strategic_relevance: aiRes.strategic_relevance,
                     recommendation_potential: 4,
                     source_name: source.name,
                     source_date: pubDate.toISOString().split('T')[0],
@@ -152,7 +161,7 @@ async function runFetcher() {
                     console.error(`   ❌ Erreur insertion Supabase :`, error.message);
                 } else {
                     insertedCount++;
-                    console.log(`   ✅ Inséré avec succès !`);
+                    console.log(`   ✅ Insight stratégique validé et inséré !`);
                 }
 
                 await new Promise(resolve => setTimeout(resolve, 1500));
@@ -162,7 +171,7 @@ async function runFetcher() {
         }
     }
 
-    console.log(`🎉 Mise à jour terminée ! ${insertedCount} nouveaux insights ajoutés.`);
+    console.log(`🎉 Mise à jour terminée ! ${insertedCount} insights pertinents ajoutés.`);
 }
 
 runFetcher();
