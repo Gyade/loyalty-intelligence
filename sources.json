@@ -1,0 +1,122 @@
+[
+  {
+    "name": "Head for Points",
+    "url": "https://headforpoints.com/feed/",
+    "region": "Europe"
+  },
+  {
+    "name": "Simple Flying",
+    "url": "https://simpleflying.com/feed/",
+    "region": "Global"
+  },
+  {
+    "name": "FlightGlobal",
+    "url": "https://www.flightglobal.com/rss/news",
+    "region": "Global"
+  },
+  {
+    "name": "Aviation Week",
+    "url": "https://aviationweek.com/rss.xml",
+    "region": "Global"
+  },
+  {
+    "name": "Skift",
+    "url": "https://skift.com/feed/",
+    "region": "Global"
+  },
+  {
+    "name": "LoyaltyLobby",
+    "url": "https://loyaltylobby.com/feed/",
+    "region": "Global"
+  },
+  {
+    "name": "The Points Guy",
+    "url": "https://thepointsguy.com/feed/",
+    "region": "US"
+  },
+  {
+    "name": "Doctor of Credit",
+    "url": "https://www.doctorofcredit.com/feed/",
+    "region": "US"
+  },
+  {
+    "name": "One Mile at a Time",
+    "url": "https://onemileatatime.com/feed/",
+    "region": "US"
+  },
+  {
+    "name": "View from the Wing",
+    "url": "https://viewfromthewing.com/feed/",
+    "region": "US"
+  },
+  {
+    "name": "Executive Traveller",
+    "url": "https://www.executivetraveller.com/rss",
+    "region": "APAC"
+  },
+  {
+    "name": "Australian Business Traveller",
+    "url": "https://www.ausbt.com.au/rss",
+    "region": "APAC"
+  },
+  {
+    "name": "God Save the Points",
+    "url": "https://godsavethepoints.com/feed/",
+    "region": "Global"
+  },
+  {
+    "name": "Turning Left for Less",
+    "url": "https://www.turningleftforless.com/feed/",
+    "region": "Europe"
+  },
+  {
+    "name": "Mainlymiles",
+    "url": "https://mainlymiles.com/feed/",
+    "region": "APAC"
+  },
+  {
+    "name": "Frequent Business Traveller",
+    "url": "https://frequentbusinesstraveler.com/feed/",
+    "region": "Global"
+  },
+  {
+    "name": "BoardingArea",
+    "url": "https://boardingarea.com/feed/",
+    "region": "Global"
+  },
+  {
+    "name": "AdExchanger",
+    "url": "https://www.adexchanger.com/feed/",
+    "region": "Global"
+  },
+  {
+    "name": "MarTech",
+    "url": "https://martech.org/feed/",
+    "region": "Global"
+  },
+  {
+    "name": "Marketing Dive",
+    "url": "https://www.marketingdive.com/feeds/news/",
+    "region": "US"
+  },
+  {
+    "name": "CMSWire",
+    "url": "https://www.cmswire.com/rss/",
+    "region": "Global"
+  },
+  {
+    "name": "PhocusWire",
+    "url": "https://www.phocuswire.com/rss",
+    "region": "Global"
+  },
+  {
+    "name": "Travel Weekly",
+    "url": "https://www.travelweekly.com/rss",
+    "region": "US"
+  },
+  {
+    "name": "Business Travel News",
+    "url": "https://www.businesstravelnews.com/rss",
+    "region": "Global"
+  }
+]
