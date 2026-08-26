@@ -18,7 +18,7 @@ jobs:
           node-version: '20' # 👈 Mis à jour en 20
 
       - name: Install dependencies
-        run: npm install rss-parser @supabase/supabase-js ws axios
+        run: npm install rss-parser @supabase/supabase-js ws axios @google/genai
 
       - name: Run monitoring script
         env:
