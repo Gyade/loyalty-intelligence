@@ -1,27 +1,158 @@
-name: Historical Backfill Insights
+import os
+import datetime
+import json
+import time
+import feedparser
+import requests
+from supabase import create_client, Client
 
-on:
-  workflow_dispatch:
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY")
+HF_TOKEN = os.environ.get("HF_TOKEN")
 
-jobs:
-  backfill:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+HF_API_URL = "https://router.huggingface.co/v1/chat/completions"
+HEADERS = {
+    "Authorization": f"Bearer {HF_TOKEN}",
+    "Content-Type": "application/json"
+}
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-      - name: Install dependencies
-        run: |
-          pip install feedparser requests supabase
+def load_sources():
+    """Charge la liste des sources depuis le fichier sources.json"""
+    try:
+        with open("sources.json", "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"⚠️ Erreur lors du chargement de sources.json: {e}")
+        return []
 
-      - name: Run backfill script
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: python backfill.py
+def fetch_rss_articles(days_back=30):
+    sources = load_sources()
+    cutoff_date = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=days_back)
+    articles = []
+    seen_urls = set()
+
+    for source in sources:
+        name = source["name"]
+        url = source["url"]
+        print(f"📡 Parsing [{source['region']}] {name}: {url}")
+        
+        try:
+            feed = feedparser.parse(url)
+            for entry in feed.entries:
+                link = entry.get("link", "")
+                if not link or link in seen_urls:
+                    continue
+                
+                published_parsed = entry.get("published_parsed") or entry.get("updated_parsed")
+                if published_parsed:
+                    pub_date = datetime.datetime(*published_parsed[:6], tzinfo=datetime.timezone.utc)
+                    if pub_date < cutoff_date:
+                        continue
+                else:
+                    pub_date = datetime.datetime.now(datetime.timezone.utc)
+
+                articles.append({
+                    "source_name": name,
+                    "title": entry.get("title", ""),
+                    "summary": entry.get("summary", entry.get("description", "")),
+                    "url": link,
+                    "published_at": pub_date.isoformat()
+                })
+                seen_urls.add(link)
+        except Exception as e:
+            print(f"⚠️ Erreur lecture flux {name}: {e}")
+
+    print(f"Total articles trouvés (30 derniers jours) : {len(articles)}")
+    return articles
+
+def analyze_article_with_ai(article):
+    prompt = f"""You are a senior loyalty and CRM strategy consultant for Flying Blue / Epsilon.
+Analyze the following article originating from the industry source '{article['source_name']}'. 
+Maintain a balanced global perspective (covering European, US, and international markets fairly).
+Return STRICTLY a valid JSON object (no markdown formatting, no ```json) with this exact structure:
+{{
+  "title": "Clear, impactful strategic title in ENGLISH",
+  "what_happened": "Concise summary of what happened in 2-3 sentences in ENGLISH.",
+  "why_it_matters": "Strategic analysis of why it matters for loyalty / CRM in ENGLISH.",
+  "suggested_epsilon_use": "Actionable recommendation for CRM / personalization strategy in ENGLISH.",
+  "category": "Airline Loyalty / CRM & Personalization / Co-Brand & Partners / Hospitality Loyalty / Data & AdTech",
+  "region": "Europe / North America / APAC / Middle East / Global",
+  "strategic_relevance": 4
+}}
+
+Article Title: {article['title']}
+Article Content: {article['summary']}
+"""
+
+    payload = {
+        "model": "meta-llama/Llama-3.3-70B-Instruct",
+        "messages": [
+            {"role": "system", "content": "You output only valid JSON in English."},
+            {"role": "user", "content": prompt}
+        ],
+        "max_tokens": 500,
+        "temperature": 0.2
+    }
+
+    try:
+        response = requests.post(HF_API_URL, headers=HEADERS, json=payload, timeout=25)
+        res_json = response.json()
+        raw_text = res_json["choices"][0]["message"]["content"].strip()
+        
+        if "```json" in raw_text:
+            raw_text = raw_text.split("```json")[1].split("```")[0].strip()
+        elif "```" in raw_text:
+            raw_text = raw_text.split("```")[1].split("```")[0].strip()
+
+        return json.loads(raw_text)
+    except Exception as e:
+        print(f"⚠️ Erreur analyse IA: {e}")
+        return None
+
+def run_backfill(max_items=100):
+    articles = fetch_rss_articles(days_back=30)
+    articles = articles[:max_items]
+    inserted_count = 0
+
+    for idx, art in enumerate(articles, 1):
+        print(f"[{idx}/{len(articles)}] [{art['source_name']}] Processing: {art['title'][:40]}...")
+        
+        existing = supabase.table("insights").select("id").eq("url", art["url"]).execute()
+        if existing.data:
+            print("   ⏩ Déjà présent dans Supabase.")
+            continue
+
+        ai_res = analyze_article_with_ai(art)
+        if not ai_res:
+            continue
+
+        record = {
+            "title": ai_res.get("title", art["title"]),
+            "what_happened": ai_res.get("what_happened", art["summary"]),
+            "why_it_matters": ai_res.get("why_it_matters", "Identified via historical retrospective analysis."),
+            "suggested_epsilon_use": ai_res.get("suggested_epsilon_use", "Leverage industry trends for lifecycle campaigns."),
+            "category": ai_res.get("category", "Airline Loyalty"),
+            "region": ai_res.get("region", "Global"),
+            "strategic_relevance": ai_res.get("strategic_relevance", 4),
+            "recommendation_potential": 4,
+            "source_name": art["source_name"],  # Nom propre de la source issu du JSON
+            "source_date": art["published_at"][:10],
+            "url": art["url"],
+            "verification_status": "Primary confirmed"
+        }
+
+        try:
+            supabase.table("insights").insert(record).execute()
+            inserted_count += 1
+            print(f"   ✅ Inséré avec succès !")
+        except Exception as e:
+            print(f"   ❌ Erreur Supabase : {e}")
+        
+        time.sleep(1)
+
+    print(f"\n🎉 Backfill terminé ! {inserted_count} nouveaux insights ajoutés.")
+
+if __name__ == "__main__":
+    run_backfill(max_items=100)
