@@ -2,7 +2,13 @@ const fs = require('fs');
 const Parser = require('rss-parser');
 const { createClient } = require('@supabase/supabase-js');
 
-const parser = new Parser();
+// Parser configuré avec un User-Agent pour éviter les erreurs 403 bloquées par certains sites
+const parser = new Parser({
+    customHeaders: {
+        'User-Agent': 'Mozilla/5.0 (compatible; EpsilonLoyaltyBot/1.0; +http://example.com)'
+    }
+});
+
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 const HF_TOKEN = process.env.HF_TOKEN;
 
@@ -62,7 +68,6 @@ Article Content: ${article.summary}
 async function runFetcher() {
     console.log("🚀 Lancement de la récupération des flux RSS depuis sources.json...");
     
-    // Chargement de sources.json
     let sources = [];
     try {
         const fileContent = fs.readFileSync('sources.json', 'utf-8');
@@ -73,7 +78,7 @@ async function runFetcher() {
     }
 
     const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - 2); // On regarde les 48 dernières heures pour être sûr de ne rien rater en horaire
+    cutoffDate.setDate(cutoffDate.getDate() - 2); // 48 dernières heures
 
     let insertedCount = 0;
 
@@ -88,12 +93,16 @@ async function runFetcher() {
                 const pubDate = item.pubDate ? new Date(item.pubDate) : new Date();
                 if (pubDate < cutoffDate) continue;
 
-                // Vérifier si l'article existe déjà dans Supabase
-                const { data: existing } = await supabase
+                // CORRECTION SUPABASE : Suppression de .execute()
+                const { data: existing, error: selectError } = await supabase
                     .from('insights')
                     .select('id')
-                    .eq('url', link)
-                    .execute();
+                    .eq('url', link);
+
+                if (selectError) {
+                    console.error(`   ⚠️ Erreur select Supabase:`, selectError.message);
+                    continue;
+                }
 
                 if (existing && existing.length > 0) {
                     continue; // Déjà présent
@@ -117,7 +126,7 @@ async function runFetcher() {
                     suggested_epsilon_use: aiRes.suggested_epsilon_use || "Leverage for lifecycle CRM.",
                     category: aiRes.category || "Airline Loyalty",
                     region: aiRes.region || source.region,
-                    strategic_relevance: ai_res.strategic_relevance || 4,
+                    strategic_relevance: aiRes.strategic_relevance || 4,
                     recommendation_potential: 4,
                     source_name: source.name,
                     source_date: pubDate.toISOString().split('T')[0],
@@ -133,7 +142,6 @@ async function runFetcher() {
                     console.log(`   ✅ Inséré avec succès !`);
                 }
 
-                // Petite pause pour ne pas saturer l'API Hugging Face
                 await new Promise(resolve => setTimeout(resolve, 1500));
             }
         } catch (e) {
