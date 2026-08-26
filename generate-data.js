@@ -2,6 +2,7 @@ const fs = require('fs');
 const Parser = require('rss-parser');
 const axios = require('axios');
 const { createClient } = require('@supabase/supabase-js');
+const { GoogleGenAI } = require('@google/genai');
 const WebSocket = require('ws');
 
 const parser = new Parser();
@@ -10,7 +11,9 @@ const supabase = createClient(
     process.env.SUPABASE_SERVICE_KEY, 
     { auth: { persistSession: false }, realtime: { transport: WebSocket } }
 );
-const HF_TOKEN = process.env.HF_TOKEN;
+
+// Initialisation de Gemini
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 async function fetchRssFeed(url) {
     try {
@@ -27,11 +30,11 @@ async function fetchRssFeed(url) {
     }
 }
 
-async function analyzeWithAI(article) {
+async function analyzeWithGemini(article) {
     const prompt = `You are a senior loyalty and CRM strategy consultant for Flying Blue / Epsilon.
 Analyze the following article originating from the industry source '${article.source_name}'. 
-Maintain a balanced global perspective (covering European, US, and international markets fairly).
-Return STRICTLY a valid JSON object (no markdown formatting, no \`\`\`json) with this exact structure:
+Maintain a balanced global perspective.
+Return STRICTLY a valid JSON object (no markdown formatting) with this exact structure:
 {
   "title": "Clear, impactful strategic title in ENGLISH",
   "what_happened": "Concise summary of what happened in 2-3 sentences in ENGLISH.",
@@ -47,33 +50,12 @@ Article Content: ${article.summary}
 `;
 
     try {
-        const response = await fetch("https://router.huggingface.co/v1/chat/completions", {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${HF_TOKEN}`,
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                model: "meta-llama/Llama-3.3-70B-Instruct",
-                messages: [
-                    { role: "system", content: "You output only valid JSON in English." },
-                    { role: "user", content: prompt }
-                ],
-                max_tokens: 500,
-                temperature: 0.2
-            })
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
         });
 
-        const data = await response.json();
-        
-        // Sécurisation de la lecture de la réponse IA
-        if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-            console.error("⚠️ Réponse inattendue de Hugging Face:", JSON.stringify(data));
-            return null;
-        }
-
-        let rawText = data.choices[0].message.content.trim();
-
+        let rawText = response.text.trim();
         if (rawText.startsWith("```json")) {
             rawText = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
         } else if (rawText.startsWith("```")) {
@@ -82,13 +64,13 @@ Article Content: ${article.summary}
 
         return JSON.parse(rawText);
     } catch (e) {
-        console.error(`⚠️ Erreur analyse IA pour "${article.title}":`, e.message);
+        console.error(`⚠️ Erreur analyse Gemini pour "${article.title}":`, e.message);
         return null;
     }
 }
 
 async function runFetcher() {
-    console.log("🚀 Lancement de la récupération élargie des flux RSS depuis sources.json...");
+    console.log("🚀 Lancement de la récupération avec Gemini...");
     
     let sources = [];
     try {
@@ -125,9 +107,7 @@ async function runFetcher() {
                     continue;
                 }
 
-                if (existing && existing.length > 0) {
-                    continue; 
-                }
+                if (existing && existing.length > 0) continue;
 
                 console.log(`   ✨ Nouvel article trouvé : ${item.title}`);
                 
@@ -137,18 +117,29 @@ async function runFetcher() {
                     summary: item.contentSnippet || item.content || item.summary || ""
                 };
 
-                const aiRes = await analyzeWithAI(articleData);
-                if (!aiRes) continue;
+                let aiRes = await analyzeWithGemini(articleData);
+                if (!aiRes) {
+                    // Mode de secours si Gemini échoue
+                    aiRes = {
+                        title: item.title,
+                        what_happened: articleData.summary.substring(0, 300),
+                        why_it_matters: "Imported via automated monitoring.",
+                        suggested_epsilon_use: "Review for CRM strategy.",
+                        category: "Airline Loyalty",
+                        region: source.region,
+                        strategic_relevance: 3
+                    };
+                }
 
-                // CORRECTION : Utilisation directe de aiRes (sans underscore)
+                // Utilisation de la colonne corrigée : why_it_matters
                 const record = {
                     title: aiRes.title || item.title,
                     what_happened: aiRes.what_happened || articleData.summary,
-                    why_to_matters: aiRes.why_it_matters || "Identified via automated monitoring.",
+                    why_it_matters: aiRes.why_it_matters || "Identified via automated monitoring.",
                     suggested_epsilon_use: aiRes.suggested_epsilon_use || "Leverage for lifecycle CRM.",
                     category: aiRes.category || "Airline Loyalty",
                     region: aiRes.region || source.region,
-                    strategic_relevance: aiRes.strategic_relevance || 4,
+                    strategic_relevance: aiRes.strategic_relevance || 3,
                     recommendation_potential: 4,
                     source_name: source.name,
                     source_date: pubDate.toISOString().split('T')[0],
