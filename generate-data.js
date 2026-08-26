@@ -12,7 +12,6 @@ const supabase = createClient(
 );
 const HF_TOKEN = process.env.HF_TOKEN;
 
-// Fonction pour récupérer le contenu d'un flux en contournant les protections anti-bot (403)
 async function fetchRssFeed(url) {
     try {
         const response = await axios.get(url, {
@@ -66,6 +65,13 @@ Article Content: ${article.summary}
         });
 
         const data = await response.json();
+        
+        // Sécurisation de la lecture de la réponse IA
+        if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+            console.error("⚠️ Réponse inattendue de Hugging Face:", JSON.stringify(data));
+            return null;
+        }
+
         let rawText = data.choices[0].message.content.trim();
 
         if (rawText.startsWith("```json")) {
@@ -94,7 +100,7 @@ async function runFetcher() {
     }
 
     const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - 3); // 3 derniers jours pour être large
+    cutoffDate.setDate(cutoffDate.getDate() - 3);
 
     let insertedCount = 0;
 
@@ -109,7 +115,6 @@ async function runFetcher() {
                 const pubDate = item.pubDate ? new Date(item.pubDate) : new Date();
                 if (pubDate < cutoffDate) continue;
 
-                // Vérification doublon Supabase (nécessite que la colonne url existe)
                 const { data: existing, error: selectError } = await supabase
                     .from('insights')
                     .select('id')
@@ -135,14 +140,15 @@ async function runFetcher() {
                 const aiRes = await analyzeWithAI(articleData);
                 if (!aiRes) continue;
 
+                // CORRECTION : Utilisation directe de aiRes (sans underscore)
                 const record = {
                     title: aiRes.title || item.title,
                     what_happened: aiRes.what_happened || articleData.summary,
                     why_to_matters: aiRes.why_it_matters || "Identified via automated monitoring.",
                     suggested_epsilon_use: aiRes.suggested_epsilon_use || "Leverage for lifecycle CRM.",
-                    category: ai_res.category || "Airline Loyalty",
-                    region: ai_res.region || source.region,
-                    strategic_relevance: ai_res.strategic_relevance || 4,
+                    category: aiRes.category || "Airline Loyalty",
+                    region: aiRes.region || source.region,
+                    strategic_relevance: aiRes.strategic_relevance || 4,
                     recommendation_potential: 4,
                     source_name: source.name,
                     source_date: pubDate.toISOString().split('T')[0],
