@@ -1,28 +1,29 @@
-name: Hourly RSS Monitor & Daily Report
+name: Hourly RSS Monitor & Data Generation
 
 on:
   schedule:
+    # S'exécute toutes les heures
     - cron: '0 * * * *'
-  workflow_dispatch:
+  workflow_dispatch: # Permet de déclencher le script manuellement depuis GitHub
 
 jobs:
   run-monitor:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: '20' # 👈 Mis à jour en 20
+          node-version: '20'
 
       - name: Install dependencies
         run: npm install rss-parser @supabase/supabase-js ws axios @google/genai
 
-      - name: Run monitoring script
+      - name: Run data generator
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: node generate-data.js
