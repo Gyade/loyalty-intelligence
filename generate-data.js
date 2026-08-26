@@ -1,22 +1,32 @@
 const fs = require('fs');
 const Parser = require('rss-parser');
+const axios = require('axios');
 const { createClient } = require('@supabase/supabase-js');
-const WebSocket = require('ws'); // 👈 Import de ws
+const WebSocket = require('ws');
 
-const parser = new Parser({
-    customHeaders: {
-        'User-Agent': 'Mozilla/5.0 (compatible; EpsilonLoyaltyBot/1.0; +http://example.com)'
-    }
-});
-
-// 👈 Ajout de l'option transport avec WebSocket
+const parser = new Parser();
 const supabase = createClient(
     process.env.SUPABASE_URL, 
     process.env.SUPABASE_SERVICE_KEY, 
-    { auth: { persistSession: false }, global: { headers: { 'x-client-info': 'epsilon-bot' } }, realtime: { transport: WebSocket } }
+    { auth: { persistSession: false }, realtime: { transport: WebSocket } }
 );
-
 const HF_TOKEN = process.env.HF_TOKEN;
+
+// Fonction pour récupérer le contenu d'un flux en contournant les protections anti-bot (403)
+async function fetchRssFeed(url) {
+    try {
+        const response = await axios.get(url, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'application/rss+xml, application/xml, text/xml, */*'
+            },
+            timeout: 10000
+        });
+        return await parser.parseString(response.data);
+    } catch (e) {
+        throw new Error(`Erreur HTTP ou parsing: ${e.message}`);
+    }
+}
 
 async function analyzeWithAI(article) {
     const prompt = `You are a senior loyalty and CRM strategy consultant for Flying Blue / Epsilon.
@@ -72,7 +82,7 @@ Article Content: ${article.summary}
 }
 
 async function runFetcher() {
-    console.log("🚀 Lancement de la récupération des flux RSS depuis sources.json...");
+    console.log("🚀 Lancement de la récupération élargie des flux RSS depuis sources.json...");
     
     let sources = [];
     try {
@@ -84,14 +94,14 @@ async function runFetcher() {
     }
 
     const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - 2); // 48 dernières heures
+    cutoffDate.setDate(cutoffDate.getDate() - 3); // 3 derniers jours pour être large
 
     let insertedCount = 0;
 
     for (const source of sources) {
         console.log(`📡 Parsing [${source.region}] ${source.name}: ${source.url}`);
         try {
-            const feed = await parser.parseURL(source.url);
+            const feed = await fetchRssFeed(source.url);
             for (const item of feed.items) {
                 const link = item.link;
                 if (!link) continue;
@@ -99,7 +109,7 @@ async function runFetcher() {
                 const pubDate = item.pubDate ? new Date(item.pubDate) : new Date();
                 if (pubDate < cutoffDate) continue;
 
-                // CORRECTION SUPABASE : Suppression de .execute()
+                // Vérification doublon Supabase (nécessite que la colonne url existe)
                 const { data: existing, error: selectError } = await supabase
                     .from('insights')
                     .select('id')
@@ -111,7 +121,7 @@ async function runFetcher() {
                 }
 
                 if (existing && existing.length > 0) {
-                    continue; // Déjà présent
+                    continue; 
                 }
 
                 console.log(`   ✨ Nouvel article trouvé : ${item.title}`);
@@ -130,9 +140,9 @@ async function runFetcher() {
                     what_happened: aiRes.what_happened || articleData.summary,
                     why_to_matters: aiRes.why_it_matters || "Identified via automated monitoring.",
                     suggested_epsilon_use: aiRes.suggested_epsilon_use || "Leverage for lifecycle CRM.",
-                    category: aiRes.category || "Airline Loyalty",
-                    region: aiRes.region || source.region,
-                    strategic_relevance: aiRes.strategic_relevance || 4,
+                    category: ai_res.category || "Airline Loyalty",
+                    region: ai_res.region || source.region,
+                    strategic_relevance: ai_res.strategic_relevance || 4,
                     recommendation_potential: 4,
                     source_name: source.name,
                     source_date: pubDate.toISOString().split('T')[0],
