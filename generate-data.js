@@ -1,155 +1,147 @@
-const https = require('https');
+const fs = require('fs');
+const Parser = require('rss-parser');
+const { createClient } = require('@supabase/supabase-js');
 
+const parser = new Parser();
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 const HF_TOKEN = process.env.HF_TOKEN;
-let SUPABASE_URL = process.env.SUPABASE_URL || '';
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
-const today = new Date().toISOString().split('T')[0];
 
-SUPABASE_URL = SUPABASE_URL.replace(/\/+$/, '');
-
-function postRequest(url, headers, payload) {
-  return new Promise((resolve, reject) => {
-    const parsedUrl = new URL(url);
-    const data = JSON.stringify(payload);
-
-    const options = {
-      hostname: parsedUrl.hostname,
-      port: 443,
-      path: parsedUrl.pathname + parsedUrl.search,
-      method: 'POST',
-      headers: {
-        ...headers,
-        'Content-Length': Buffer.byteLength(data)
-      }
-    };
-
-    const req = https.request(options, (res) => {
-      let body = '';
-      res.on('data', (chunk) => body += chunk);
-      res.on('end', () => {
-        resolve({ status: res.statusCode, ok: res.statusCode >= 200 && res.statusCode < 300, body });
-      });
-    });
-
-    req.on('error', (e) => reject(e));
-    req.write(data);
-    req.end();
-  });
-}
-
-function extractJson(text) {
-  const firstBrace = text.indexOf('{');
-  const lastBrace = text.lastIndexOf('}');
-  if (firstBrace === -1 || lastBrace === -1 || lastBrace < firstBrace) {
-    throw new Error("Aucun JSON valide trouvé dans la réponse du modèle.");
-  }
-  return text.substring(firstBrace, lastBrace + 1);
-}
-
-async function saveToSupabase(insights) {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
-    console.error("❌ SUPABASE_URL ou SUPABASE_SERVICE_KEY manquant !");
-    return;
-  }
-
-  const endpoint = `${SUPABASE_URL}/rest/v1/insights`;
-  const headers = {
-    "apikey": SUPABASE_SERVICE_KEY,
-    "Authorization": `Bearer ${SUPABASE_SERVICE_KEY}`,
-    "Content-Type": "application/json",
-    "Prefer": "resolution=ignore-duplicates"
-  };
-
-  try {
-    const res = await postRequest(endpoint, headers, insights);
-    if (res.ok) {
-      console.log(`✅ ${insights.length} vrais insights Hugging Face synchronisés dans Supabase !`);
-    } else {
-      console.error("❌ Erreur réponse Supabase :", res.body);
-    }
-  } catch (err) {
-    console.error("❌ Erreur réseau Supabase :", err.message);
-  }
-}
-
-async function fetchPass(promptTopic) {
-  if (!HF_TOKEN) {
-    console.warn("⚠️ HF_TOKEN manquant dans les secrets GitHub.");
-    return null;
-  }
-
-  const systemPrompt = `You are a senior loyalty & CRM strategy consultant for Flying Blue / Epsilon.
-Generate a strategic intelligence report in ENGLISH ONLY. Return ONLY RAW VALID JSON matching this structure:
+async function analyzeWithAI(article) {
+    const prompt = `You are a senior loyalty and CRM strategy consultant for Flying Blue / Epsilon.
+Analyze the following article originating from the industry source '${article.source_name}'. 
+Maintain a balanced global perspective (covering European, US, and international markets fairly).
+Return STRICTLY a valid JSON object (no markdown formatting, no \`\`\`json) with this exact structure:
 {
-  "insights": [
-    {
-      "title": "...",
-      "category": "Airline Loyalty",
-      "region": "Europe",
-      "strategic_relevance": 5,
-      "recommendation_potential": 4,
-      "what_happened": "...",
-      "why_it_matters": "...",
-      "suggested_epsilon_use": "...",
-      "source_name": "Industry Intelligence",
-      "source_url": "https://news.google.com"
-    }
-  ]
-}`;
-
-  // Utilisation du routeur global universel de Hugging Face
-  const HF_GLOBAL_ROUTER = "https://router.huggingface.co/v1/chat/completions";
-  const MODEL_NAME = "meta-llama/Llama-3.3-70B-Instruct";
-
-  const payload = {
-    model: MODEL_NAME,
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: `Generate 2 high-value strategic loyalty insights in ENGLISH regarding: ${promptTopic}. Output ONLY raw JSON.` }
-    ],
-    max_tokens: 1500,
-    temperature: 0.7
-  };
-
-  const headers = {
-    "Authorization": `Bearer ${HF_TOKEN}`,
-    "Content-Type": "application/json",
-    "User-Agent": "NodeJS-HF-Client/1.0"
-  };
-
-  try {
-    const res = await postRequest(HF_GLOBAL_ROUTER, headers, payload);
-    if (res.ok) {
-      const data = JSON.parse(res.body);
-      if (data.choices && data.choices[0] && data.choices[0].message) {
-        const rawContent = data.choices[0].message.content;
-        return JSON.parse(extractJson(rawContent));
-      }
-    } else {
-      console.warn(`⚠️ Réponse HF [${res.status}] :`, res.body);
-    }
-  } catch (e) {
-    console.warn("Exception lors de l'appel HF :", e.message);
-  }
-  return null;
+  "title": "Clear, impactful strategic title in ENGLISH",
+  "what_happened": "Concise summary of what happened in 2-3 sentences in ENGLISH.",
+  "why_it_matters": "Strategic analysis of why it matters for loyalty / CRM in ENGLISH.",
+  "suggested_epsilon_use": "Actionable recommendation for CRM / personalization strategy in ENGLISH.",
+  "category": "Airline Loyalty / CRM & Personalization / Co-Brand & Partners / Hospitality Loyalty / Data & AdTech",
+  "region": "Europe / North America / APAC / Middle East / Global",
+  "strategic_relevance": 4
 }
 
-async function main() {
-  const allInsights = [];
+Article Title: ${article.title}
+Article Content: ${article.summary}
+`;
 
-  console.log("Pass 1/2: Génération HF Router - Airline Loyalty & Alliances...");
-  const pass1 = await fetchPass("Airline Loyalty programs, status reciprocity, and dynamic award pricing");
-  if (pass1 && pass1.insights) allInsights.push(...pass1.insights);
+    try {
+        const response = await fetch("https://router.huggingface.co/v1/chat/completions", {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${HF_TOKEN}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                model: "meta-llama/Llama-3.3-70B-Instruct",
+                messages: [
+                    { role: "system", content: "You output only valid JSON in English." },
+                    { role: "user", content: prompt }
+                ],
+                max_tokens: 500,
+                temperature: 0.2
+            })
+        });
 
-  console.log("Pass 2/2: Génération HF Router - CRM & Co-Brand...");
-  const pass2 = await fetchPass("Co-brand credit cards, hyper-personalization, and retail/hospitality partnerships");
-  if (pass2 && pass2.insights) allInsights.push(...pass2.insights);
+        const data = await response.json();
+        let rawText = data.choices[0].message.content.trim();
 
-  if (allInsights.length > 0) {
-    await saveToSupabase(allInsights);
-  } else {
-    console.error("❌ Aucune donnée générée par Hugging Face.");
-  }
+        if (rawText.startsWith("```json")) {
+            rawText = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
+        } else if (rawText.startsWith("```")) {
+            rawText = rawText.replace(/```/g, "").trim();
+        }
+
+        return JSON.parse(rawText);
+    } catch (e) {
+        console.error(`⚠️ Erreur analyse IA pour "${article.title}":`, e.message);
+        return null;
+    }
 }
 
-main();
+async function runFetcher() {
+    console.log("🚀 Lancement de la récupération des flux RSS depuis sources.json...");
+    
+    // Chargement de sources.json
+    let sources = [];
+    try {
+        const fileContent = fs.readFileSync('sources.json', 'utf-8');
+        sources = JSON.parse(fileContent);
+    } catch (e) {
+        console.error("❌ Impossible de lire sources.json :", e.message);
+        return;
+    }
+
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - 2); // On regarde les 48 dernières heures pour être sûr de ne rien rater en horaire
+
+    let insertedCount = 0;
+
+    for (const source of sources) {
+        console.log(`📡 Parsing [${source.region}] ${source.name}: ${source.url}`);
+        try {
+            const feed = await parser.parseURL(source.url);
+            for (const item of feed.items) {
+                const link = item.link;
+                if (!link) continue;
+
+                const pubDate = item.pubDate ? new Date(item.pubDate) : new Date();
+                if (pubDate < cutoffDate) continue;
+
+                // Vérifier si l'article existe déjà dans Supabase
+                const { data: existing } = await supabase
+                    .from('insights')
+                    .select('id')
+                    .eq('url', link)
+                    .execute();
+
+                if (existing && existing.length > 0) {
+                    continue; // Déjà présent
+                }
+
+                console.log(`   ✨ Nouvel article trouvé : ${item.title}`);
+                
+                const articleData = {
+                    source_name: source.name,
+                    title: item.title,
+                    summary: item.contentSnippet || item.content || item.summary || ""
+                };
+
+                const aiRes = await analyzeWithAI(articleData);
+                if (!aiRes) continue;
+
+                const record = {
+                    title: aiRes.title || item.title,
+                    what_happened: aiRes.what_happened || articleData.summary,
+                    why_to_matters: aiRes.why_it_matters || "Identified via automated monitoring.",
+                    suggested_epsilon_use: aiRes.suggested_epsilon_use || "Leverage for lifecycle CRM.",
+                    category: aiRes.category || "Airline Loyalty",
+                    region: aiRes.region || source.region,
+                    strategic_relevance: ai_res.strategic_relevance || 4,
+                    recommendation_potential: 4,
+                    source_name: source.name,
+                    source_date: pubDate.toISOString().split('T')[0],
+                    url: link,
+                    verification_status: "Primary confirmed"
+                };
+
+                const { error } = await supabase.from('insights').insert([record]);
+                if (error) {
+                    console.error(`   ❌ Erreur insertion Supabase :`, error.message);
+                } else {
+                    insertedCount++;
+                    console.log(`   ✅ Inséré avec succès !`);
+                }
+
+                // Petite pause pour ne pas saturer l'API Hugging Face
+                await new Promise(resolve => setTimeout(resolve, 1500));
+            }
+        } catch (e) {
+            console.error(`⚠️ Erreur flux ${source.name}:`, e.message);
+        }
+    }
+
+    console.log(`🎉 Mise à jour terminée ! ${insertedCount} nouveaux insights ajoutés.`);
+}
+
+runFetcher();
