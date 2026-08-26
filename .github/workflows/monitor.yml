@@ -2,8 +2,8 @@ name: Hourly RSS Monitor & Daily Report
 
 on:
   schedule:
-    - cron: '0 * * * *' # S'exécute toutes les heures pile
-  workflow_dispatch: # Permet de le lancer manuellement depuis l'onglet Actions de GitHub
+    - cron: '0 * * * *'
+  workflow_dispatch:
 
 jobs:
   run-monitor:
@@ -15,7 +15,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '18'
+          node-version: '20' # 👈 Mis à jour en 20
 
       - name: Install dependencies
         run: npm install rss-parser @supabase/supabase-js
