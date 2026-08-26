@@ -50,8 +50,8 @@ Article Content: ${article.summary}
 `;
 
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+     const response = await ai.models.generateContent({
+            model: 'gemini-3.6-flash', // <-- Nouveau modèle conseillé
             contents: prompt,
         });
 
