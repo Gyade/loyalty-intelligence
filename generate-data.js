@@ -1,15 +1,21 @@
 const fs = require('fs');
 const Parser = require('rss-parser');
 const { createClient } = require('@supabase/supabase-js');
+const WebSocket = require('ws'); // 👈 Import de ws
 
-// Parser configuré avec un User-Agent pour éviter les erreurs 403 bloquées par certains sites
 const parser = new Parser({
     customHeaders: {
         'User-Agent': 'Mozilla/5.0 (compatible; EpsilonLoyaltyBot/1.0; +http://example.com)'
     }
 });
 
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+// 👈 Ajout de l'option transport avec WebSocket
+const supabase = createClient(
+    process.env.SUPABASE_URL, 
+    process.env.SUPABASE_SERVICE_KEY, 
+    { auth: { persistSession: false }, global: { headers: { 'x-client-info': 'epsilon-bot' } }, realtime: { transport: WebSocket } }
+);
+
 const HF_TOKEN = process.env.HF_TOKEN;
 
 async function analyzeWithAI(article) {
