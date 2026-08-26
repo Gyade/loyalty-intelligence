@@ -13,7 +13,7 @@ const supabase = createClient(
 );
 
 // Initialisation de Gemini
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY, vertexAI: false });
+const ai = new GoogleGenAI({});
 
 async function fetchRssFeed(url) {
     try {
